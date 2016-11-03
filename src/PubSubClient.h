@@ -7,10 +7,8 @@
 #ifndef PubSubClient_h
 #define PubSubClient_h
 
-#include <Arduino.h>
-#include "IPAddress.h"
+#include <stdio.h>
 #include "Client.h"
-#include "Stream.h"
 
 #define MQTT_VERSION_3_1      3
 #define MQTT_VERSION_3_1_1    4
@@ -80,65 +78,29 @@
 #define MQTT_CALLBACK_SIGNATURE void (*callback)(char*, uint8_t*, unsigned int)
 #endif
 
-class PubSubClient {
-private:
-   Client* _client;
-   uint8_t buffer[MQTT_MAX_PACKET_SIZE];
-   uint16_t nextMsgId;
-   unsigned long lastOutActivity;
-   unsigned long lastInActivity;
-   bool pingOutstanding;
-   MQTT_CALLBACK_SIGNATURE;
-   uint16_t readPacket(uint8_t*);
-   boolean readByte(uint8_t * result);
-   boolean readByte(uint8_t * result, uint16_t * index);
-   boolean write(uint8_t header, uint8_t* buf, uint16_t length);
-   uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos);
-   IPAddress ip;
-   const char* domain;
-   uint16_t port;
-   Stream* stream;
-   int _state;
-public:
-   PubSubClient();
-   PubSubClient(Client& client);
-   PubSubClient(IPAddress, uint16_t, Client& client);
-   PubSubClient(IPAddress, uint16_t, Client& client, Stream&);
-   PubSubClient(IPAddress, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client);
-   PubSubClient(IPAddress, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client, Stream&);
-   PubSubClient(uint8_t *, uint16_t, Client& client);
-   PubSubClient(uint8_t *, uint16_t, Client& client, Stream&);
-   PubSubClient(uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client);
-   PubSubClient(uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client, Stream&);
-   PubSubClient(const char*, uint16_t, Client& client);
-   PubSubClient(const char*, uint16_t, Client& client, Stream&);
-   PubSubClient(const char*, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client);
-   PubSubClient(const char*, uint16_t, MQTT_CALLBACK_SIGNATURE,Client& client, Stream&);
+#define boolean bool
 
-   PubSubClient& setServer(IPAddress ip, uint16_t port);
-   PubSubClient& setServer(uint8_t * ip, uint16_t port);
-   PubSubClient& setServer(const char * domain, uint16_t port);
-   PubSubClient& setCallback(MQTT_CALLBACK_SIGNATURE);
-   PubSubClient& setClient(Client& client);
-   PubSubClient& setStream(Stream& stream);
+void    PubSubClient_init              (Client_t* client);
+void    PubSubClient_initIP            (Client_t* client, uint8_t *, uint16_t);
+void    PubSubClient_initIPCallback    (Client_t* client, uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE);
+void    PubSubClient_initHost          (Client_t* client, const char*, uint16_t);
+void    PubSubClient_initHostCallback  (Client_t* client, const char*, uint16_t, MQTT_CALLBACK_SIGNATURE);
 
-   boolean connect(const char* id);
-   boolean connect(const char* id, const char* user, const char* pass);
-   boolean connect(const char* id, const char* willTopic, uint8_t willQos, boolean willRetain, const char* willMessage);
-   boolean connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, boolean willRetain, const char* willMessage);
-   void disconnect();
-   boolean publish(const char* topic, const char* payload);
-   boolean publish(const char* topic, const char* payload, boolean retained);
-   boolean publish(const char* topic, const uint8_t * payload, unsigned int plength);
-   boolean publish(const char* topic, const uint8_t * payload, unsigned int plength, boolean retained);
-   boolean publish_P(const char* topic, const uint8_t * payload, unsigned int plength, boolean retained);
-   boolean subscribe(const char* topic);
-   boolean subscribe(const char* topic, uint8_t qos);
-   boolean unsubscribe(const char* topic);
-   boolean loop();
-   boolean connected();
-   int state();
-};
+boolean PubSubClient_connectId(const char* id);
+boolean PubSubClient_connectIdUserPass(const char* id, const char* user, const char* pass);
+//   boolean connect(const char* id, const char* willTopic, uint8_t willQos, boolean willRetain, const char* willMessage);
+boolean PubSubClient_connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, boolean willRetain, const char* willMessage);
+void    PubSubClient_disconnect();
 
+boolean PubSubClient_publish(const char* topic, const uint8_t * payload, unsigned int plength);
+boolean PubSubClient_publishRetained(const char* topic, const uint8_t * payload, unsigned int plength, boolean retained);
+
+boolean PubSubClient_subscribe(const char* topic);
+boolean PubSubClient_subscribeQOS(const char* topic, uint8_t qos);
+
+boolean PubSubClient_unsubscribe(const char* topic);
+
+boolean PubSubClient_loop();
+boolean PubSubClient_connected();
 
 #endif
