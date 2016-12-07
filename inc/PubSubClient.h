@@ -8,6 +8,7 @@
 #define PubSubClient_h
 
 #include <stdio.h>
+#include <stdbool.h>
 #include "Client.h"
 
 #define MQTT_VERSION_3_1      3
