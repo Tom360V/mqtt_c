@@ -5,7 +5,6 @@
 */
 
 #include "PubSubClient.h"
-#include "x86.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -23,6 +22,7 @@ static uint16_t readPacket  (uint8_t* lengthLength);
 static boolean  write       (uint8_t header, uint8_t* buf, uint16_t length);
 static uint16_t writeString (const char* string, uint8_t* buf, uint16_t pos);
 
+static fpMillis_t pMillis;
 /******************************************************************************
  * Private Variable
  *****************************************************************************/
@@ -73,9 +73,9 @@ static void setClient(Client_t* client)
 // reads a byte into result
 boolean readByte(uint8_t * result)
 {
-   uint32_t previousMillis = millis();
+   uint32_t previousMillis = pMillis();
    while(!pubSubData.client->available()) {
-     uint32_t currentMillis = millis();
+     uint32_t currentMillis = pMillis();
      if(currentMillis - previousMillis >= ((int32_t) MQTT_SOCKET_TIMEOUT * 1000)){
        return false;
      }
@@ -126,7 +126,8 @@ static uint16_t readPacket(uint8_t* lengthLength)
         }
     }
 
-    for (uint16_t i = start;i<length;i++)
+    uint16_t i;
+    for (i = start;i<length;i++)
     {
         if(!readByte(&digit))
         {
@@ -166,7 +167,8 @@ static boolean write(uint8_t header, uint8_t* buf, uint16_t length)
     } while(len>0);
 
     buf[4-llen] = header;
-    for (int i=0;i<llen;i++) {
+    int i;
+    for (i=0;i<llen;i++) {
         buf[5-llen+i] = lenBuf[i];
     }
 
@@ -185,7 +187,7 @@ static boolean write(uint8_t header, uint8_t* buf, uint16_t length)
     return result;
 #else
     rc = pubSubData.client->writeMulti(buf+(4-llen),length+1+llen);
-    pubSubData.lastOutActivity = millis();
+    pubSubData.lastOutActivity = pMillis();
     return (rc == 1+llen+length);
 #endif
 }
@@ -207,36 +209,39 @@ static uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos)
 /******************************************************************************
  * Function implementation
  *****************************************************************************/
-void PubSubClient_init(Client_t* client)
+void PubSubClient_init(Client_t* client, fpMillis_t fpMillis)
 {
     pubSubData.state = MQTT_DISCONNECTED;
     setClient(client);
+    pMillis = fpMillis;
 }
 
-void PubSubClient_initIP(Client_t* client, uint8_t *ip, uint16_t port)
+void PubSubClient_initIP(Client_t* client, fpMillis_t fpMillis, uint8_t *ip, uint16_t port)
 {
-    PubSubClient_initIPCallback(client, ip, port, NULL);
+    PubSubClient_initIPCallback(client, fpMillis, ip, port, NULL);
 }
 
-void PubSubClient_initIPCallback(Client_t* client, uint8_t *ip, uint16_t port, MQTT_CALLBACK_SIGNATURE)
+void PubSubClient_initIPCallback(Client_t* client, fpMillis_t fpMillis, uint8_t *ip, uint16_t port, MQTT_CALLBACK_SIGNATURE)
 {
     pubSubData.state = MQTT_DISCONNECTED;
     setServerIP(ip, port);
     setCallback(callback);
     setClient(client);
+    pMillis = fpMillis;
 }
 
-void PubSubClient_initHost(Client_t* client, const char* domain, uint16_t port)
+void PubSubClient_initHost(Client_t* client, fpMillis_t fpMillis, const char* domain, uint16_t port)
 {
-    PubSubClient_initHostCallback(client, domain, port, NULL);
+    PubSubClient_initHostCallback(client, fpMillis, domain, port, NULL);
 }
 
-void PubSubClient_initHostCallback(Client_t* client, const char* domain, uint16_t port, MQTT_CALLBACK_SIGNATURE)
+void PubSubClient_initHostCallback(Client_t* client, fpMillis_t fpMillis, const char* domain, uint16_t port, MQTT_CALLBACK_SIGNATURE)
 {
     pubSubData.state = MQTT_DISCONNECTED;
     setServerHost(domain,port);
     setCallback(callback);
     setClient(client);
+    pMillis = fpMillis;
 }
 
 boolean PubSubClient_connectId(const char *id)
@@ -314,10 +319,10 @@ boolean PubSubClient_connect(const char *id, const char *user, const char *pass,
 
             write(MQTTCONNECT,pubSubData.buffer,length-5);
 
-            pubSubData.lastInActivity = pubSubData.lastOutActivity = millis();
+            pubSubData.lastInActivity = pubSubData.lastOutActivity = pMillis();
 
             while (!pubSubData.client->available()) {
-                unsigned long t = millis();
+                unsigned long t = pMillis();
                 if (t-pubSubData.lastInActivity >= ((int32_t) MQTT_SOCKET_TIMEOUT*1000UL)) {
                     pubSubData.state = MQTT_CONNECTION_TIMEOUT;
                     pubSubData.client->stop();
@@ -331,7 +336,7 @@ boolean PubSubClient_connect(const char *id, const char *user, const char *pass,
             {
                 if (pubSubData.buffer[3] == 0)
                 {
-                    pubSubData.lastInActivity = millis();
+                    pubSubData.lastInActivity = pMillis();
                     pubSubData.pingOutstanding = false;
                     pubSubData.state = MQTT_CONNECTED;
                     return true;
@@ -353,7 +358,7 @@ boolean PubSubClient_loop()
 {
     if (PubSubClient_connected())
     {
-        unsigned long t = millis();
+        unsigned long t = pMillis();
         if( (t - pubSubData.lastInActivity > MQTT_KEEPALIVE*1000UL) ||
             (t - pubSubData.lastOutActivity > MQTT_KEEPALIVE*1000UL))
         {
@@ -382,8 +387,9 @@ boolean PubSubClient_loop()
                 if (type == MQTTPUBLISH)
                 {
                     uint16_t tl = (pubSubData.buffer[llen+1]<<8)+pubSubData.buffer[llen+2];
+                    uint16_t i;
                     char topic[tl+1];
-                    for (uint16_t i=0;i<tl;i++)
+                    for (i=0;i<tl;i++)
                     {
                         topic[i] = pubSubData.buffer[llen+3+i];
                     }
@@ -516,7 +522,7 @@ void PubSubClient_disconnect()
     pubSubData.client->writeMulti(pubSubData.buffer,2);
     pubSubData.state = MQTT_DISCONNECTED;
     pubSubData.client->stop();
-    pubSubData.lastInActivity = pubSubData.lastOutActivity = millis();
+    pubSubData.lastInActivity = pubSubData.lastOutActivity = pMillis();
 }
 
 boolean PubSubClient_connected()

@@ -81,11 +81,13 @@
 
 #define boolean bool
 
-void    PubSubClient_init              (Client_t* client);
-void    PubSubClient_initIP            (Client_t* client, uint8_t *, uint16_t);
-void    PubSubClient_initIPCallback    (Client_t* client, uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE);
-void    PubSubClient_initHost          (Client_t* client, const char*, uint16_t);
-void    PubSubClient_initHostCallback  (Client_t* client, const char*, uint16_t, MQTT_CALLBACK_SIGNATURE);
+typedef unsigned long (*fpMillis_t)(void);
+
+void    PubSubClient_init              (Client_t* client, fpMillis_t fpMillis);
+void    PubSubClient_initIP            (Client_t* client, fpMillis_t fpMillis, uint8_t *, uint16_t);
+void    PubSubClient_initIPCallback    (Client_t* client, fpMillis_t fpMillis, uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE);
+void    PubSubClient_initHost          (Client_t* client, fpMillis_t fpMillis, const char*, uint16_t);
+void    PubSubClient_initHostCallback  (Client_t* client, fpMillis_t fpMillis, const char*, uint16_t, MQTT_CALLBACK_SIGNATURE);
 
 boolean PubSubClient_connectId(const char* id);
 boolean PubSubClient_connectIdUserPass(const char* id, const char* user, const char* pass);
