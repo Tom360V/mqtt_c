@@ -14,7 +14,7 @@ set(srcs src/PubSubClient.c)
 
 
 #Add Library
-add_library(FIFO SHARED ${srcs})
+add_library(mqtt_c SHARED ${srcs})
 
 #######################################
 
