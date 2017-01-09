@@ -83,6 +83,7 @@
 
 typedef unsigned long (*fpMillis_t)(void);
 
+void    PubSubClient_setMyAddress( const char* globalLocation, const char* localLocation, const char* deviceName);
 void    PubSubClient_init              (Client_t* client, fpMillis_t fpMillis);
 void    PubSubClient_initIP            (Client_t* client, fpMillis_t fpMillis, uint8_t *, uint16_t);
 void    PubSubClient_initIPCallback    (Client_t* client, fpMillis_t fpMillis, uint8_t *, uint16_t, MQTT_CALLBACK_SIGNATURE);
@@ -95,11 +96,11 @@ boolean PubSubClient_connectIdUserPass(const char* id, const char* user, const c
 boolean PubSubClient_connect(const char* id, const char* user, const char* pass, const char* willTopic, uint8_t willQos, boolean willRetain, const char* willMessage);
 void    PubSubClient_disconnect();
 
-boolean PubSubClient_publish(const char* topic, const uint8_t * payload, unsigned int plength);
-boolean PubSubClient_publishRetained(const char* topic, const uint8_t * payload, unsigned int plength, boolean retained);
+boolean PubSubClient_publish(const char* topic, const uint8_t * payload, unsigned int plength, boolean addAddress);
+boolean PubSubClient_publishRetained(const char* topic, const uint8_t * payload, unsigned int plength, boolean retained, boolean addAddress);
 
 boolean PubSubClient_subscribe(const char* topic);
-boolean PubSubClient_subscribeQOS(const char* topic, uint8_t qos);
+boolean PubSubClient_subscribeQOS(const char* topic, uint8_t qos, uint8_t sendAddress);
 
 boolean PubSubClient_unsubscribe(const char* topic);
 

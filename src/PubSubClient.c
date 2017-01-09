@@ -20,9 +20,11 @@ static boolean  readBytePos (uint8_t* result, uint16_t * index);
 static uint16_t readPacket  (uint8_t* lengthLength);
 
 static boolean  write       (uint8_t header, uint8_t* buf, uint16_t length);
+static uint16_t copyString  (const char* string, char* buf, uint16_t max);
+static uint16_t writeStringAddAddress(const char* string, char* buf, uint16_t pos);
 static uint16_t writeString (const char* string, uint8_t* buf, uint16_t pos);
-
 static fpMillis_t pMillis;
+
 /******************************************************************************
  * Private Variable
  *****************************************************************************/
@@ -42,6 +44,18 @@ typedef struct pubSubClientData_t
 } pubSubClientData_t;
 
 static pubSubClientData_t pubSubData;
+
+#define ADDRESS_LENGTH  (15)
+
+typedef struct
+{
+    char gLocation[ADDRESS_LENGTH];
+    char lLocation[ADDRESS_LENGTH];
+    char deviceName[ADDRESS_LENGTH];
+    uint16_t length;
+} address_t;
+
+address_t myAddress = {"NL/EHV1/DUMMY/", 14};
 
 /******************************************************************************
  * Private Function Implementation
@@ -192,6 +206,31 @@ static boolean write(uint8_t header, uint8_t* buf, uint16_t length)
 #endif
 }
 
+static uint16_t copyString(const char* string, char* buf, uint16_t max)
+{
+    const char* p = string;
+    uint16_t pos = 0;
+    while( (*p) && (pos<max))
+    {
+        buf[pos++] = *p++;
+    }
+    return pos;
+}
+
+static uint16_t writeStringAddAddress(const char* string, char* buf, uint16_t pos)
+{
+    uint16_t start = pos;
+    pos += 2;
+    pos += copyString ((char*)myAddress.gLocation,  &buf[pos], strlen(myAddress.gLocation ));
+    pos += copyString ((char*)myAddress.lLocation,  &buf[pos], strlen(myAddress.lLocation ));
+    pos += copyString ((char*)myAddress.deviceName, &buf[pos], strlen(myAddress.deviceName));
+    pos += copyString ((char*)string,               &buf[pos], strlen(string));
+
+    buf[start]   = ((pos-start-2) >> 8);
+    buf[start+1] = ((pos-start-2) & 0xFF);
+    return pos;
+}
+
 static uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos)
 {
     const char* idp = string;
@@ -209,6 +248,34 @@ static uint16_t writeString(const char* string, uint8_t* buf, uint16_t pos)
 /******************************************************************************
  * Function implementation
  *****************************************************************************/
+
+void PubSubClient_setMyAddress( const char* globalLocation,
+                                const char* localLocation,
+                                const char* deviceName)
+{
+    int8_t length = ADDRESS_LENGTH;
+    char *p;
+
+    p  = myAddress.gLocation;
+    p += copyString(globalLocation, myAddress.gLocation, ADDRESS_LENGTH-2);
+    *(p++) = '/';
+    *(p) = 0x0;
+
+    p  = myAddress.lLocation;
+    p += copyString(localLocation,  myAddress.lLocation, ADDRESS_LENGTH-2);
+    *(p++) = '/';
+    *(p) = 0x0;
+
+    p  = myAddress.deviceName;
+    p += copyString(deviceName,     myAddress.deviceName, ADDRESS_LENGTH-2);
+    *(p++) = '/';
+    *(p) = 0x0;
+
+    myAddress.length =  strlen(myAddress.gLocation) +
+                        strlen(myAddress.lLocation) +
+                        strlen(myAddress.deviceName);
+}
+
 void PubSubClient_init(Client_t* client, fpMillis_t fpMillis)
 {
     pubSubData.state = MQTT_DISCONNECTED;
@@ -407,12 +474,12 @@ boolean PubSubClient_loop()
                         pubSubData.buffer[3] = (msgId & 0xFF);
                         pubSubData.client->writeMulti(pubSubData.buffer,4);
                         pubSubData.lastOutActivity = t;
-
                     }
                     else
                     {
                         payload = pubSubData.buffer+llen+3+tl;
-                        pubSubData.callback(topic,payload,len-llen-3-tl);
+                        //TKE: remove myAddress!!!
+                        pubSubData.callback(&topic[myAddress.length],payload,len-llen-3-tl);
                     }
                 }
                 else if (type == MQTTPINGREQ)
@@ -432,12 +499,12 @@ boolean PubSubClient_loop()
     return false;
 }
 
-boolean PubSubClient_publish(const char* topic, const uint8_t* payload, unsigned int plength)
+boolean PubSubClient_publish(const char* topic, const uint8_t* payload, unsigned int plength, boolean addAddress)
 {
-    return PubSubClient_publishRetained(topic, payload, plength, false);
+    return PubSubClient_publishRetained(topic, payload, plength, false, addAddress);
 }
 
-boolean PubSubClient_publishRetained(const char* topic, const uint8_t* payload, unsigned int plength, boolean retained)
+boolean PubSubClient_publishRetained(const char* topic, const uint8_t* payload, unsigned int plength, boolean retained, boolean addAddress)
 {
     if (PubSubClient_connected()) {
         if (MQTT_MAX_PACKET_SIZE < 5 + 2+strlen(topic) + plength) {
@@ -446,7 +513,17 @@ boolean PubSubClient_publishRetained(const char* topic, const uint8_t* payload, 
         }
         // Leave room in the buffer for header and variable length field
         uint16_t length = 5;
-        length = writeString(topic,pubSubData.buffer,length);
+        if(addAddress == false)
+        {
+            length = writeString(topic,pubSubData.buffer,length);
+        }
+        else
+        {
+            length = writeStringAddAddress(topic,pubSubData.buffer,length);
+        }
+
+        //TKE: Add Address!!!
+
         uint16_t i;
         for (i=0;i<plength;i++) {
             pubSubData.buffer[length++] = payload[i];
@@ -463,10 +540,10 @@ boolean PubSubClient_publishRetained(const char* topic, const uint8_t* payload, 
 
 boolean PubSubClient_subscribe(const char* topic)
 {
-    return PubSubClient_subscribeQOS(topic, 0);
+    return PubSubClient_subscribeQOS(topic, 0, 1);
 }
 
-boolean PubSubClient_subscribeQOS(const char* topic, uint8_t qos)
+boolean PubSubClient_subscribeQOS(const char* topic, uint8_t qos, uint8_t sendAddress)
 {
     if (qos < 0 || qos > 1)
     {
@@ -477,6 +554,13 @@ boolean PubSubClient_subscribeQOS(const char* topic, uint8_t qos)
         // Too long
         return false;
     }
+    if( (sendAddress != 0) &&
+        (MQTT_MAX_PACKET_SIZE < ( 9 + strlen(topic) + myAddress.length)) )
+    {
+        // Too long
+        return false;
+    }
+
     if (PubSubClient_connected())
     {
         // Leave room in the buffer for header and variable length field
@@ -486,9 +570,18 @@ boolean PubSubClient_subscribeQOS(const char* topic, uint8_t qos)
         {
             pubSubData.nextMsgId = 1;
         }
+
         pubSubData.buffer[length++] = (pubSubData.nextMsgId >> 8);
         pubSubData.buffer[length++] = (pubSubData.nextMsgId & 0xFF);
-        length = writeString((char*)topic, pubSubData.buffer,length);
+        if(sendAddress == 0)
+        {
+            length = writeString((char*)topic, pubSubData.buffer,length);
+        }
+        else
+        {
+            length = writeStringAddAddress((char*)topic, pubSubData.buffer,length);
+        }
+
         pubSubData.buffer[length++] = qos;
         return write(MQTTSUBSCRIBE|MQTTQOS1,pubSubData.buffer,length-5);
     }
