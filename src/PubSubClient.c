@@ -25,6 +25,8 @@ static uint16_t writeStringAddAddress(const char* string, char* buf, uint16_t po
 static uint16_t writeString (const char* string, uint8_t* buf, uint16_t pos);
 static fpMillis_t pMillis;
 
+static ENABLE_DEBUG = 0;
+
 /******************************************************************************
  * Private Variable
  *****************************************************************************/
@@ -45,17 +47,19 @@ typedef struct pubSubClientData_t
 
 static pubSubClientData_t pubSubData;
 
-#define ADDRESS_LENGTH  (15)
+#define ADDRESS_LENGTH  (25)
 
 typedef struct
 {
-    char gLocation[ADDRESS_LENGTH];
-    char lLocation[ADDRESS_LENGTH];
-    char deviceName[ADDRESS_LENGTH];
+    char address[ADDRESS_LENGTH];
+/*    char *gLocation;
+    char *lLocation;
+    char *deviceName;*/
     uint16_t length;
 } address_t;
 
-address_t myAddress = {"NL/EHV1/DUMMY/", 14};
+static address_t myAddress = {"NL/EHV1/DUMMY/\0", 14};
+//static address_t myAddress = {"DWL/KITCHEN/DEVICENAME/\0", 14};
 
 /******************************************************************************
  * Private Function Implementation
@@ -221,10 +225,8 @@ static uint16_t writeStringAddAddress(const char* string, char* buf, uint16_t po
 {
     uint16_t start = pos;
     pos += 2;
-    pos += copyString ((char*)myAddress.gLocation,  &buf[pos], strlen(myAddress.gLocation ));
-    pos += copyString ((char*)myAddress.lLocation,  &buf[pos], strlen(myAddress.lLocation ));
-    pos += copyString ((char*)myAddress.deviceName, &buf[pos], strlen(myAddress.deviceName));
-    pos += copyString ((char*)string,               &buf[pos], strlen(string));
+    pos += copyString ((char*)myAddress.address,  &buf[pos], strlen(myAddress.address));
+    pos += copyString ((char*)string,             &buf[pos], strlen(string));
 
     buf[start]   = ((pos-start-2) >> 8);
     buf[start+1] = ((pos-start-2) & 0xFF);
@@ -253,27 +255,21 @@ void PubSubClient_setMyAddress( const char* globalLocation,
                                 const char* localLocation,
                                 const char* deviceName)
 {
-    int8_t length = ADDRESS_LENGTH;
-    char *p;
+    char *p = myAddress.address;
 
-    p  = myAddress.gLocation;
-    p += copyString(globalLocation, myAddress.gLocation, ADDRESS_LENGTH-2);
+    p += copyString(globalLocation, p, strlen(globalLocation));
     *(p++) = '/';
     *(p) = 0x0;
 
-    p  = myAddress.lLocation;
-    p += copyString(localLocation,  myAddress.lLocation, ADDRESS_LENGTH-2);
+    p += copyString(localLocation,  p, strlen(localLocation));
     *(p++) = '/';
     *(p) = 0x0;
 
-    p  = myAddress.deviceName;
-    p += copyString(deviceName,     myAddress.deviceName, ADDRESS_LENGTH-2);
+    p += copyString(deviceName,     p, strlen(deviceName));
     *(p++) = '/';
     *(p) = 0x0;
 
-    myAddress.length =  strlen(myAddress.gLocation) +
-                        strlen(myAddress.lLocation) +
-                        strlen(myAddress.deviceName);
+    myAddress.length =  p - myAddress.address;
 }
 
 void PubSubClient_init(Client_t* client, fpMillis_t fpMillis)
@@ -426,8 +422,9 @@ boolean PubSubClient_loop()
     if (PubSubClient_connected())
     {
         unsigned long t = pMillis();
-        if( (t - pubSubData.lastInActivity > MQTT_KEEPALIVE*1000UL) ||
-            (t - pubSubData.lastOutActivity > MQTT_KEEPALIVE*1000UL))
+        
+        if( (t - pubSubData.lastInActivity > MQTT_KEEPALIVE*1000UL) ||       //TKE CHANGE 500 BACK TO 1000!
+            (t - pubSubData.lastOutActivity > MQTT_KEEPALIVE*1000UL))        //TKE CHANGE 500 BACK TO 1000!
         {
             if (pubSubData.pingOutstanding) {
                 pubSubData.state = MQTT_CONNECTION_TIMEOUT;
@@ -492,6 +489,15 @@ boolean PubSubClient_loop()
                 {
                     pubSubData.pingOutstanding = false;
                 }
+                else if (type == MQTTSUBACK)
+                {
+                    //Ignore
+                }
+                else
+                {
+                    //TKE ERROR!!!
+                    pubSubData.pingOutstanding = false;
+                }
             }
         }
         return true;
@@ -506,6 +512,7 @@ boolean PubSubClient_publish(const char* topic, const uint8_t* payload, unsigned
 
 boolean PubSubClient_publishRetained(const char* topic, const uint8_t* payload, unsigned int plength, boolean retained, boolean addAddress)
 {
+    ENABLE_DEBUG=1;
     if (PubSubClient_connected()) {
         if (MQTT_MAX_PACKET_SIZE < 5 + 2+strlen(topic) + plength) {
             // Too long
@@ -519,7 +526,7 @@ boolean PubSubClient_publishRetained(const char* topic, const uint8_t* payload, 
         }
         else
         {
-            length = writeStringAddAddress(topic,pubSubData.buffer,length);
+            length = writeStringAddAddress(topic,(char*)pubSubData.buffer,length);
         }
 
         //TKE: Add Address!!!
@@ -579,7 +586,7 @@ boolean PubSubClient_subscribeQOS(const char* topic, uint8_t qos, uint8_t sendAd
         }
         else
         {
-            length = writeStringAddAddress((char*)topic, pubSubData.buffer,length);
+            length = writeStringAddAddress((char*)topic, (char*)pubSubData.buffer,length);
         }
 
         pubSubData.buffer[length++] = qos;
